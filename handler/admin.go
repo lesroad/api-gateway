@@ -1,11 +1,10 @@
 package handler
 
 import (
-	"net/http"
-	"strconv"
-
 	"api-gateway/model"
 	"api-gateway/service"
+	"net/http"
+	"strconv"
 
 	"github.com/gin-gonic/gin"
 	"go.mongodb.org/mongo-driver/bson/primitive"

@@ -1,13 +1,12 @@
 package service
 
 import (
+	"api-gateway/model"
+	"api-gateway/repository"
 	"context"
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
-
-	"api-gateway/model"
-	"api-gateway/repository"
 
 	"go.mongodb.org/mongo-driver/bson/primitive"
 )

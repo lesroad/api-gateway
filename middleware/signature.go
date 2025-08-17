@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"api-gateway/model"
 	"bytes"
 	"crypto/hmac"
 	"crypto/sha256"
@@ -10,8 +11,6 @@ import (
 	"net/http"
 	"strconv"
 	"time"
-
-	"api-gateway/model"
 )
 
 // SignatureValidator 签名验证器接口

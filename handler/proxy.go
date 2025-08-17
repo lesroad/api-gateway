@@ -1,6 +1,10 @@
 package handler
 
 import (
+	"api-gateway/config"
+	"api-gateway/errors"
+	"api-gateway/model"
+	"api-gateway/pkg/logger"
 	"bytes"
 	"context"
 	"fmt"
@@ -8,11 +12,6 @@ import (
 	"net/http"
 	"strings"
 	"time"
-
-	"api-gateway/config"
-	"api-gateway/errors"
-	"api-gateway/model"
-	"api-gateway/pkg/logger"
 
 	"github.com/gin-gonic/gin"
 )

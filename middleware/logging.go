@@ -1,14 +1,13 @@
 package middleware
 
 import (
+	"api-gateway/model"
+	"api-gateway/pkg/logger"
+	"api-gateway/repository"
 	"bytes"
 	"context"
 	"net/http"
 	"time"
-
-	"api-gateway/model"
-	"api-gateway/pkg/logger"
-	"api-gateway/repository"
 
 	"github.com/gin-gonic/gin"
 	"go.mongodb.org/mongo-driver/bson/primitive"

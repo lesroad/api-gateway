@@ -1,11 +1,10 @@
 package repository
 
 import (
+	"api-gateway/model"
 	"context"
 	"fmt"
 	"time"
-
-	"api-gateway/model"
 
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"

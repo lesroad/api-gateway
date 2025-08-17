@@ -1,15 +1,14 @@
 package middleware
 
 import (
-	"context"
-	"net/http"
-	"strings"
-	"time"
-
 	"api-gateway/config"
 	"api-gateway/errors"
 	"api-gateway/pkg/logger"
 	"api-gateway/repository"
+	"context"
+	"net/http"
+	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 )

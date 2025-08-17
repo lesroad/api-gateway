@@ -1,0 +1,5 @@
+*.local.yaml
+*.yaml
+*.yml
+*_test.go
+api-gateway

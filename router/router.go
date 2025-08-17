@@ -28,15 +28,15 @@ func SetupRouter(clientRepo repository.ClientRepository, callLogRepo repository.
 	proxyHandler := handler.NewProxyHandler()
 	adminHandler := handler.NewAdminHandler(clientService)
 
-	r.GET("/health", func(c *gin.Context) {
-		c.JSON(200, gin.H{
-			"status":  "ok",
-			"service": "api-gateway",
-		})
-	})
-
 	api := r.Group("/api")
 	{
+		api.GET("/health", func(c *gin.Context) {
+			c.JSON(200, gin.H{
+				"status":  "ok",
+				"service": "api-gateway",
+			})
+		})
+
 		api.Use(authMiddleware.Authenticate())
 		api.Use(billingMiddleware.CheckCalls())
 		api.Use(loggingMiddleware.LogAPICall())
@@ -48,7 +48,6 @@ func SetupRouter(clientRepo repository.ClientRepository, callLogRepo repository.
 
 	admin := r.Group("/admin")
 	{
-
 		admin.POST("/clients", adminHandler.CreateClient)
 		admin.GET("/clients", adminHandler.ListClients)
 		admin.GET("/clients/:id", adminHandler.GetClient)

@@ -15,6 +15,7 @@ type Client struct {
 	Version    string             `json:"version" bson:"version"`         // 绑定的API版本
 	CallCount  int                `json:"call_count" bson:"call_count"`   // 剩余调用次数
 	TotalCount int                `json:"total_count" bson:"total_count"` // 总购买次数
+	QPS        int                `json:"qps" bson:"qps"`                 // 每秒请求数限制
 	Status     int                `json:"status" bson:"status"`           // 0:禁用 1:正常
 	CreatedAt  time.Time          `json:"created_at" bson:"created_at"`
 	UpdatedAt  time.Time          `json:"updated_at" bson:"updated_at"`
@@ -36,6 +37,7 @@ func NewClient(name, apiKey, secret, version string, initialCallCount int) *Clie
 		Version:    version,
 		CallCount:  initialCallCount,
 		TotalCount: initialCallCount,
+		QPS:        10, // 默认QPS限制为10
 		Status:     ClientStatusActive,
 		CreatedAt:  now,
 		UpdatedAt:  now,

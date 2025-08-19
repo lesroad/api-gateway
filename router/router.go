@@ -20,6 +20,7 @@ func SetupRouter(clientRepo repository.ClientRepository, callLogRepo repository.
 	signatureValidator := middleware.NewHMACSignatureValidator(timeWindow)
 
 	authMiddleware := middleware.NewAuthMiddleware(clientRepo, signatureValidator, cfg)
+	rateLimitMiddleware := middleware.NewRateLimitMiddleware()
 	billingMiddleware := middleware.NewBillingMiddleware(clientRepo, callLogRepo)
 	loggingMiddleware := middleware.NewLoggingMiddleware(callLogRepo)
 
@@ -37,10 +38,11 @@ func SetupRouter(clientRepo repository.ClientRepository, callLogRepo repository.
 			})
 		})
 
-		api.Use(authMiddleware.Authenticate())
-		api.Use(billingMiddleware.CheckCalls())
-		api.Use(loggingMiddleware.LogAPICall())
-		api.Use(billingMiddleware.DeductCalls())
+		api.Use(authMiddleware.Authenticate())   // 1. 认证
+		api.Use(rateLimitMiddleware.RateLimit()) // 2. 限流
+		api.Use(billingMiddleware.CheckCalls())  // 3. 检查次数
+		api.Use(loggingMiddleware.LogAPICall())  // 4. 记录日志
+		api.Use(billingMiddleware.DeductCalls()) // 5. 扣减次数
 
 		api.POST("/essay/evaluate/stream", proxyHandler.ProxyRequest)
 		api.POST("/sts/ocr", proxyHandler.ProxyRequest)
@@ -52,6 +54,7 @@ func SetupRouter(clientRepo repository.ClientRepository, callLogRepo repository.
 		admin.GET("/clients", adminHandler.ListClients)
 		admin.GET("/clients/:id", adminHandler.GetClient)
 		admin.PUT("/clients/:id/status", adminHandler.UpdateClientStatus)
+		admin.PUT("/clients/:id/qps", adminHandler.UpdateClientQPS)
 
 		admin.POST("/clients/:id/recharge", adminHandler.RechargeClient)
 

@@ -115,6 +115,11 @@ func (s *ClientService) GetClientCallLogs(ctx context.Context, clientID primitiv
 	return s.callLogRepo.GetByClientID(ctx, clientID, offset, limit)
 }
 
+// UpdateClientQPS updates a client's QPS limit
+func (s *ClientService) UpdateClientQPS(ctx context.Context, id primitive.ObjectID, qps int) error {
+	return s.clientRepo.UpdateQPS(ctx, id, qps)
+}
+
 // generateAPIKey generates a random API key
 func (s *ClientService) generateAPIKey() (string, error) {
 	bytes := make([]byte, 32) // 64 character hex string

@@ -27,6 +27,7 @@ type CreateClientRequest struct {
 	Name             string `json:"name" binding:"required"`
 	Version          string `json:"version" binding:"required"`
 	InitialCallCount int    `json:"initial_call_count" binding:"min=0"`
+	QPS              int    `json:"qps" binding:"min=1"`
 }
 
 // CreateClientResponse represents the response after creating a client
@@ -37,6 +38,7 @@ type CreateClientResponse struct {
 	Secret           string `json:"secret"` // 仅创建时返回一次
 	Version          string `json:"version"`
 	InitialCallCount int    `json:"initial_call_count"`
+	QPS              int    `json:"qps"`
 	Status           int    `json:"status"`
 	CreatedAt        string `json:"created_at"`
 }
@@ -49,6 +51,11 @@ type RechargeRequest struct {
 // UpdateStatusRequest represents the request to update client status
 type UpdateStatusRequest struct {
 	Status int `json:"status" binding:"min=0,max=1"`
+}
+
+// UpdateQPSRequest represents the request to update client QPS
+type UpdateQPSRequest struct {
+	QPS int `json:"qps" binding:"required,min=1,max=1000"`
 }
 
 // StatsResponse represents basic statistics
@@ -81,6 +88,20 @@ func (h *AdminHandler) CreateClient(c *gin.Context) {
 		return
 	}
 
+	// 如果请求中指定了QPS，则更新客户的QPS设置
+	if req.QPS > 0 {
+		err = h.clientService.UpdateClientQPS(c.Request.Context(), client.ID, req.QPS)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, ErrorResponse{
+				Code:    50001,
+				Message: "Failed to set client QPS",
+				Error:   err.Error(),
+			})
+			return
+		}
+		client.QPS = req.QPS
+	}
+
 	response := CreateClientResponse{
 		ID:               client.ID.Hex(),
 		Name:             client.Name,
@@ -88,6 +109,7 @@ func (h *AdminHandler) CreateClient(c *gin.Context) {
 		Secret:           client.Secret,
 		Version:          client.Version,
 		InitialCallCount: client.CallCount,
+		QPS:              client.QPS,
 		Status:           client.Status,
 		CreatedAt:        client.CreatedAt.Format("2006-01-02 15:04:05"),
 	}
@@ -328,6 +350,62 @@ func (h *AdminHandler) GetStats(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, stats)
+}
+
+// UpdateClientQPS updates a client's QPS limit
+func (h *AdminHandler) UpdateClientQPS(c *gin.Context) {
+	clientID := c.Param("id")
+	if clientID == "" {
+		c.JSON(http.StatusBadRequest, ErrorResponse{
+			Code:    40001,
+			Message: "Client ID is required",
+		})
+		return
+	}
+
+	objectID, err := primitive.ObjectIDFromHex(clientID)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, ErrorResponse{
+			Code:    40001,
+			Message: "Invalid client ID format",
+			Error:   err.Error(),
+		})
+		return
+	}
+
+	var req UpdateQPSRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, ErrorResponse{
+			Code:    40001,
+			Message: "Invalid request parameters",
+			Error:   err.Error(),
+		})
+		return
+	}
+
+	err = h.clientService.UpdateClientQPS(c.Request.Context(), objectID, req.QPS)
+	if err != nil {
+		if err.Error() == "client not found" {
+			c.JSON(http.StatusNotFound, ErrorResponse{
+				Code:    40404,
+				Message: "Client not found",
+			})
+			return
+		}
+
+		c.JSON(http.StatusInternalServerError, ErrorResponse{
+			Code:    50007,
+			Message: "Failed to update client QPS",
+			Error:   err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message":   "Client QPS updated successfully",
+		"client_id": clientID,
+		"qps":       req.QPS,
+	})
 }
 
 // ErrorResponse represents an error response

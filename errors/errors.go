@@ -15,6 +15,7 @@ const (
 	// Billing related errors
 	ErrInsufficientCalls = 40301 // 调用次数不足
 	ErrCallLimitExceeded = 42901 // 调用频率超限
+	ErrRateLimitExceeded = 42902 // QPS限流超限
 
 	// Proxy related errors
 	ErrUpstreamTimeout = 50401 // 上游服务超时
@@ -85,5 +86,13 @@ func NewUpstreamTimeoutError() *APIError {
 func NewUpstreamError(message string) *APIError {
 	return NewAPIError(ErrUpstreamError, "上游服务错误", gin.H{
 		"upstream_message": message,
+	})
+}
+
+// Rate limit errors
+func NewRateLimitExceededError(clientID string, qps int) *APIError {
+	return NewAPIError(ErrRateLimitExceeded, "请求频率超限，请稍后重试", gin.H{
+		"client_id": clientID,
+		"qps_limit": qps,
 	})
 }

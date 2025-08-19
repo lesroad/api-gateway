@@ -16,6 +16,7 @@ type ClientServiceInterface interface {
 	RechargeClient(ctx context.Context, id primitive.ObjectID, callCount int) error
 	ConsumeCall(ctx context.Context, id primitive.ObjectID) error
 	UpdateClientStatus(ctx context.Context, id primitive.ObjectID, status int) error
+	UpdateClientQPS(ctx context.Context, id primitive.ObjectID, qps int) error
 	DeleteClient(ctx context.Context, id primitive.ObjectID) error
 	LogAPICall(ctx context.Context, clientID primitive.ObjectID, apiKey, version, path, method string, status int, duration int64) error
 	GetClientCallLogs(ctx context.Context, clientID primitive.ObjectID, offset, limit int) ([]*model.CallLog, error)

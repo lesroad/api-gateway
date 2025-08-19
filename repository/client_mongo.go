@@ -169,6 +169,28 @@ func (r *ClientMongoRepository) DeductCallCount(ctx context.Context, id primitiv
 	return nil
 }
 
+// UpdateQPS updates the QPS limit for a client
+func (r *ClientMongoRepository) UpdateQPS(ctx context.Context, id primitive.ObjectID, qps int) error {
+	filter := bson.M{"_id": id}
+	update := bson.M{
+		"$set": bson.M{
+			"qps":        qps,
+			"updated_at": time.Now(),
+		},
+	}
+
+	result, err := r.collection.UpdateOne(ctx, filter, update)
+	if err != nil {
+		return fmt.Errorf("failed to update client QPS: %w", err)
+	}
+
+	if result.MatchedCount == 0 {
+		return fmt.Errorf("client not found")
+	}
+
+	return nil
+}
+
 // Delete deletes a client by ID
 func (r *ClientMongoRepository) Delete(ctx context.Context, id primitive.ObjectID) error {
 	result, err := r.collection.DeleteOne(ctx, bson.M{"_id": id})

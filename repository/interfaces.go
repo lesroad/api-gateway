@@ -19,6 +19,8 @@ type ClientRepository interface {
 	UpdateCallCount(ctx context.Context, id primitive.ObjectID, delta int) error
 	// DeductCallCount atomically decrements call count by 1, returns error if insufficient calls
 	DeductCallCount(ctx context.Context, id primitive.ObjectID) error
+	// UpdateQPS updates the QPS limit for a client
+	UpdateQPS(ctx context.Context, id primitive.ObjectID, qps int) error
 	// Update updates a client
 	Update(ctx context.Context, client *model.Client) error
 	// List retrieves all clients with pagination

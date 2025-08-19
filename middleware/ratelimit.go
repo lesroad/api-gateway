@@ -127,7 +127,7 @@ func (rl *RateLimitMiddleware) getOrCreateBucket(clientID string, qps int) *Toke
 		bucket.mutex.Lock()
 		if bucket.refillRate != qps {
 			bucket.refillRate = qps
-			bucket.capacity = qps * 2 // 桶容量设为QPS的2倍，允许突发流量
+			bucket.capacity = qps
 			if bucket.tokens > bucket.capacity {
 				bucket.tokens = bucket.capacity
 			}
@@ -145,7 +145,7 @@ func (rl *RateLimitMiddleware) getOrCreateBucket(clientID string, qps int) *Toke
 		return bucket
 	}
 
-	bucket = NewTokenBucket(qps*2, qps) // 桶容量为QPS的2倍
+	bucket = NewTokenBucket(qps, qps)
 	rl.buckets[clientID] = bucket
 
 	logger.Infof("Created new token bucket for client %s with QPS %d", clientID, qps)

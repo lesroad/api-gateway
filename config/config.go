@@ -8,7 +8,7 @@ import (
 	"gopkg.in/yaml.v2"
 )
 
-// // go:embed config.dev.yaml
+//go:embed config.yaml
 var embeddedConfig []byte
 
 var config *Config

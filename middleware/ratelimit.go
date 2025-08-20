@@ -1,13 +1,12 @@
 package middleware
 
 import (
-	"net/http"
-	"sync"
-	"time"
-
 	"api-gateway/errors"
 	"api-gateway/model"
 	"api-gateway/pkg/logger"
+	"net/http"
+	"sync"
+	"time"
 
 	"github.com/gin-gonic/gin"
 )

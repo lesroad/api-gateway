@@ -46,6 +46,7 @@ func SetupRouter(clientRepo repository.ClientRepository, callLogRepo repository.
 
 		api.POST("/essay/evaluate/stream", proxyHandler.ProxyRequest)
 		api.POST("/sts/ocr", proxyHandler.ProxyRequest)
+		api.POST("/essay/evaluate/english", proxyHandler.ProxyRequest)
 	}
 
 	admin := r.Group("/admin")

@@ -59,11 +59,6 @@ func (s *ClientService) CreateClient(ctx context.Context, name, version string, 
 	return client, nil
 }
 
-// GetClientByAPIKey retrieves a client by API key
-func (s *ClientService) GetClientByAPIKey(ctx context.Context, apiKey string) (*model.Client, error) {
-	return s.clientRepo.GetByAPIKey(ctx, apiKey)
-}
-
 // GetClientByID retrieves a client by ID
 func (s *ClientService) GetClientByID(ctx context.Context, id primitive.ObjectID) (*model.Client, error) {
 	return s.clientRepo.GetByID(ctx, id)
@@ -83,11 +78,6 @@ func (s *ClientService) RechargeClient(ctx context.Context, id primitive.ObjectI
 	return s.clientRepo.UpdateCallCount(ctx, id, callCount)
 }
 
-// ConsumeCall decrements the call count for a client
-func (s *ClientService) ConsumeCall(ctx context.Context, id primitive.ObjectID) error {
-	return s.clientRepo.UpdateCallCount(ctx, id, -1)
-}
-
 // UpdateClientStatus updates the status of a client
 func (s *ClientService) UpdateClientStatus(ctx context.Context, id primitive.ObjectID, status int) error {
 	client, err := s.clientRepo.GetByID(ctx, id)
@@ -97,17 +87,6 @@ func (s *ClientService) UpdateClientStatus(ctx context.Context, id primitive.Obj
 
 	client.Status = status
 	return s.clientRepo.Update(ctx, client)
-}
-
-// DeleteClient deletes a client
-func (s *ClientService) DeleteClient(ctx context.Context, id primitive.ObjectID) error {
-	return s.clientRepo.Delete(ctx, id)
-}
-
-// LogAPICall logs an API call
-func (s *ClientService) LogAPICall(ctx context.Context, clientID primitive.ObjectID, apiKey, version, path, method string, status int, duration int64) error {
-	log := model.NewCallLog(clientID, apiKey, version, path, method, status, duration)
-	return s.callLogRepo.Create(ctx, log)
 }
 
 // GetClientCallLogs retrieves call logs for a client

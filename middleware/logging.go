@@ -1,16 +1,19 @@
 package middleware
 
 import (
+	"api-gateway/errors"
 	"api-gateway/model"
 	"api-gateway/pkg/logger"
 	"api-gateway/repository"
 	"bytes"
 	"context"
+	"encoding/json"
+	"io"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
 // LoggingMiddleware 调用日志记录中间件
@@ -25,23 +28,89 @@ func NewLoggingMiddleware(callLogRepo repository.CallLogRepository) *LoggingMidd
 	}
 }
 
-// responseWriter 包装gin.ResponseWriter以捕获响应状态码
-type responseWriter struct {
+// loggingResponseWriter 包装gin.ResponseWriter以捕获响应状态码和内容
+// 避免与标准库的ResponseWriter混淆，使用更具体的命名
+type loggingResponseWriter struct {
 	gin.ResponseWriter
-	statusCode int
-	body       *bytes.Buffer
+	statusCode        int
+	notStreamResponse *bytes.Buffer
+	isStreamRequest   bool
+	streamBuffer      *bytes.Buffer // 收集所有流式数据
 }
 
-func (rw *responseWriter) WriteHeader(code int) {
-	rw.statusCode = code
-	rw.ResponseWriter.WriteHeader(code)
-}
-
-func (rw *responseWriter) Write(b []byte) (int, error) {
-	if rw.body != nil {
-		rw.body.Write(b)
+// newLoggingResponseWriter 创建一个新的日志记录响应写入器
+func newLoggingResponseWriter(w gin.ResponseWriter, isStream bool) *loggingResponseWriter {
+	return &loggingResponseWriter{
+		ResponseWriter:    w,
+		statusCode:        http.StatusOK, // 默认状态码
+		notStreamResponse: bytes.NewBuffer(nil),
+		isStreamRequest:   isStream,
+		streamBuffer:      bytes.NewBuffer(nil),
 	}
-	return rw.ResponseWriter.Write(b)
+}
+
+// CaptureStatusCode 捕获HTTP状态码
+func (lrw *loggingResponseWriter) WriteHeader(code int) {
+	lrw.statusCode = code
+	lrw.ResponseWriter.WriteHeader(code)
+}
+
+// CaptureResponseData 捕获响应数据并写入到底层ResponseWriter
+func (lrw *loggingResponseWriter) Write(data []byte) (int, error) {
+	// 如果是流式请求，先收集数据，不立即解析
+	if lrw.isStreamRequest {
+		lrw.streamBuffer.Write(data)
+	} else {
+		lrw.notStreamResponse.Write(data)
+	}
+
+	// 写入到实际的ResponseWriter
+	return lrw.ResponseWriter.Write(data)
+}
+
+// GetStatusCode 获取HTTP状态码
+func (lrw *loggingResponseWriter) GetStatusCode() int {
+	return lrw.statusCode
+}
+
+// GetResponseBody 获取响应体内容
+func (lrw *loggingResponseWriter) GetResponseBody() string {
+	if lrw.isStreamRequest {
+		// 对于流式响应，现在解析完整数据并提取最终结果
+		return lrw.parseCompleteStreamData()
+	}
+
+	// 对于普通响应，返回完整的响应体
+	return lrw.notStreamResponse.String()
+}
+
+// parseCompleteStreamData 解析完整的流式数据，提取最终的完成消息
+func (lrw *loggingResponseWriter) parseCompleteStreamData() string {
+	content := lrw.streamBuffer.String()
+
+	// 解析SSE格式的流式数据
+	lines := strings.Split(content, "\n")
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+
+		// 查找以 "data: " 开头的行
+		if strings.HasPrefix(line, "data: ") {
+			dataContent := strings.TrimPrefix(line, "data: ")
+
+			// 尝试解析JSON数据
+			var messageData map[string]any
+			if err := json.Unmarshal([]byte(dataContent), &messageData); err != nil {
+				continue // 跳过无效的JSON
+			}
+
+			// 每次找到complete或error消息都更新，最后一个会被保留
+			if msgType, exists := messageData["type"].(string); exists && (msgType == "complete" || msgType == "error") {
+				return dataContent
+			}
+		}
+	}
+
+	return ""
 }
 
 // LogAPICall 记录API调用日志
@@ -50,27 +119,36 @@ func (l *LoggingMiddleware) LogAPICall() gin.HandlerFunc {
 		// 记录开始时间
 		startTime := time.Now()
 
-		// 从上下文中获取客户信息（由认证中间件设置）
+		// 从上下文中获取客户信息
 		clientInterface, exists := c.Get("client")
 		if !exists {
-			// 如果没有客户信息，说明认证失败，仍然记录日志但使用空值
-			c.Next()
+			errors.RespondWithError(c, http.StatusUnauthorized, errors.NewAPIError(errors.ErrInvalidAPIKey, "认证失败", nil))
 			return
 		}
 
 		client, ok := clientInterface.(*model.Client)
 		if !ok {
-			c.Next()
+			errors.RespondWithError(c, http.StatusUnauthorized, errors.NewAPIError(errors.ErrInvalidAPIKey, "认证失败", nil))
 			return
 		}
 
-		// 包装ResponseWriter以捕获状态码
-		rw := &responseWriter{
-			ResponseWriter: c.Writer,
-			statusCode:     http.StatusOK, // 默认状态码
-			body:           bytes.NewBuffer(nil),
+		// 读取请求体
+		requestBody := ""
+		if c.Request.Body != nil {
+			bodyBytes, err := io.ReadAll(c.Request.Body)
+			if err == nil {
+				requestBody = string(bodyBytes)
+				// 重新设置请求体，以便后续处理可以读取
+				c.Request.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
+			}
 		}
-		c.Writer = rw
+
+		// 检查是否为流式响应
+		isStream := strings.Contains(c.Request.URL.Path, "/stream")
+
+		// 创建日志记录响应写入器
+		lrw := newLoggingResponseWriter(c.Writer, isStream)
+		c.Writer = lrw
 
 		// 处理请求
 		c.Next()
@@ -78,15 +156,18 @@ func (l *LoggingMiddleware) LogAPICall() gin.HandlerFunc {
 		// 计算响应时间
 		duration := time.Since(startTime).Milliseconds()
 
+		// 获取响应内容
+		responseBody := lrw.GetResponseBody()
+
 		// 创建调用日志
-		callLog := model.NewCallLog(
+		callLog := model.NewCallLogWithParams(
 			client.ID,
 			client.APIKey,
-			extractVersionFromPath(c.Request.URL.Path),
 			c.Request.URL.Path,
-			c.Request.Method,
-			rw.statusCode,
+			lrw.GetStatusCode(),
 			duration,
+			requestBody,
+			responseBody,
 		)
 
 		// 异步记录日志，避免影响响应性能
@@ -98,66 +179,9 @@ func (l *LoggingMiddleware) LogAPICall() gin.HandlerFunc {
 				// 记录日志失败不应该影响主要业务流程
 				logger.Errorf("Failed to create call log: %v", err)
 			} else {
-				logger.Infof("API call logged: %s %s by client %s, status: %d, duration: %dms",
-					callLog.Method, callLog.Path, callLog.ClientID.Hex(), callLog.Status, callLog.Duration)
+				logger.Infof("API call logged: %s by client %s, status: %d, duration: %dms",
+					callLog.Path, callLog.ClientID.Hex(), callLog.Status, callLog.Duration)
 			}
 		}()
 	}
-}
-
-// LogFailedRequest 记录失败的请求（认证失败、计费失败等）
-func (l *LoggingMiddleware) LogFailedRequest(clientID primitive.ObjectID, apiKey, reason string) gin.HandlerFunc {
-	return func(c *gin.Context) {
-		startTime := time.Now()
-
-		// 包装ResponseWriter以捕获状态码
-		rw := &responseWriter{
-			ResponseWriter: c.Writer,
-			statusCode:     http.StatusOK,
-			body:           bytes.NewBuffer(nil),
-		}
-		c.Writer = rw
-
-		// 处理请求
-		c.Next()
-
-		// 计算响应时间
-		duration := time.Since(startTime).Milliseconds()
-
-		// 创建调用日志
-		callLog := model.NewCallLog(
-			clientID,
-			apiKey,
-			extractVersionFromPath(c.Request.URL.Path),
-			c.Request.URL.Path,
-			c.Request.Method,
-			rw.statusCode,
-			duration,
-		)
-
-		// 异步记录日志
-		go func() {
-			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-			defer cancel()
-
-			if err := l.callLogRepo.Create(ctx, callLog); err != nil {
-				logger.Errorf("Failed to create failed request log: %v", err)
-			} else {
-				logger.Infof("Failed request logged: %s %s by client %s, reason: %s, status: %d",
-					callLog.Method, callLog.Path, callLog.ClientID.Hex(), reason, callLog.Status)
-			}
-		}()
-	}
-}
-
-// extractVersionFromPath 从请求路径中提取版本信息
-func extractVersionFromPath(path string) string {
-	// 从路径中提取版本，例如 /api/v1/essay/evaluate/stream -> v1
-	if len(path) >= 7 && path[:7] == "/api/v1" {
-		return "v1"
-	}
-	if len(path) >= 7 && path[:7] == "/api/v2" {
-		return "v2"
-	}
-	return "unknown"
 }

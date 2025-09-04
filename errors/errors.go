@@ -46,10 +46,8 @@ func NewAPIError(code int, message string, data interface{}) *APIError {
 	}
 }
 
-// RespondWithError sends an error response
 func RespondWithError(c *gin.Context, httpStatus int, apiError *APIError) {
-	c.JSON(httpStatus, apiError)
-	c.Abort()
+	c.AbortWithStatusJSON(httpStatus, apiError)
 }
 
 // Authentication errors

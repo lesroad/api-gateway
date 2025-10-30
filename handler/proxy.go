@@ -5,6 +5,7 @@ import (
 	"api-gateway/errors"
 	"api-gateway/model"
 	"api-gateway/pkg/logger"
+	"api-gateway/pkg/signature"
 	"bytes"
 	"context"
 	"fmt"
@@ -18,8 +19,9 @@ import (
 
 // ProxyHandler 代理处理器
 type ProxyHandler struct {
-	client *http.Client
-	config *config.Config
+	client           *http.Client
+	config           *config.Config
+	signatureFactory *signature.SignatureFactory
 }
 
 // NewProxyHandler 创建代理处理器
@@ -28,7 +30,8 @@ func NewProxyHandler() *ProxyHandler {
 		client: &http.Client{
 			Timeout: 0,
 		},
-		config: config.GetConfig(),
+		config:           config.GetConfig(),
+		signatureFactory: signature.NewSignatureFactory(),
 	}
 }
 
@@ -90,6 +93,9 @@ func (p *ProxyHandler) ProxyRequest(c *gin.Context) {
 	defer resp.Body.Close()
 
 	logger.Infof("Received response from upstream: status %d", resp.StatusCode)
+	// bodyBytes, _ := io.ReadAll(resp.Body)
+	// logger.Infof("Body: %s", string(bodyBytes))
+
 	// 转发响应
 	p.forwardResponse(c, resp)
 }
@@ -124,7 +130,6 @@ func (p *ProxyHandler) getTimeoutForVersion(version string) time.Duration {
 
 // createProxyRequest 创建代理请求
 func (p *ProxyHandler) createProxyRequest(c *gin.Context, targetURL string) (*http.Request, error) {
-	// 读取原始请求体
 	var bodyBytes []byte
 	if c.Request.Body != nil {
 		var err error
@@ -135,7 +140,6 @@ func (p *ProxyHandler) createProxyRequest(c *gin.Context, targetURL string) (*ht
 		c.Request.Body.Close()
 	}
 
-	// 创建新的请求
 	proxyReq, err := http.NewRequest(c.Request.Method, targetURL, bytes.NewReader(bodyBytes))
 	if err != nil {
 		return nil, fmt.Errorf("创建HTTP请求失败: %w", err)
@@ -145,7 +149,9 @@ func (p *ProxyHandler) createProxyRequest(c *gin.Context, targetURL string) (*ht
 	skipHeaders := map[string]bool{
 		"host":           true,
 		"content-length": true,
-		"x-api-key":      true, // API密钥不应该转发给上游服务
+		"x-api-key":      true,
+		"x-signature":    true,
+		"x-timestamp":    true,
 	}
 
 	for name, values := range c.Request.Header {
@@ -156,18 +162,20 @@ func (p *ProxyHandler) createProxyRequest(c *gin.Context, targetURL string) (*ht
 		}
 	}
 
-	// 设置Content-Length
 	if len(bodyBytes) > 0 {
 		proxyReq.Header.Set("Content-Length", fmt.Sprintf("%d", len(bodyBytes)))
 	}
 
-	// 设置User-Agent
 	proxyReq.Header.Set("User-Agent", "API-Gateway/1.0")
 
+	if err := p.addSignatureHeaders(proxyReq, c.Request.URL.Path, bodyBytes); err != nil {
+		logger.Errorf("Failed to add signature headers: %v", err)
+	}
+
+	logger.Infof("Proxy request header: %+v, body:%s", proxyReq.Header, string(bodyBytes))
 	return proxyReq, nil
 }
 
-// forwardResponse 转发响应
 func (p *ProxyHandler) forwardResponse(c *gin.Context, resp *http.Response) {
 	// 复制响应头，但跳过一些不应该转发的头
 	skipHeaders := map[string]bool{
@@ -256,6 +264,55 @@ func (p *ProxyHandler) forwardRegularResponse(c *gin.Context, resp *http.Respons
 		// 如果复制失败，可能是客户端断开连接
 		return
 	}
+}
+
+func (p *ProxyHandler) addSignatureHeaders(req *http.Request, path string, body []byte) error {
+	if p.config == nil || len(p.config.PathSignatures) == 0 {
+		return nil
+	}
+
+	var signatureConfig *config.SignatureConfig
+	for _, mapping := range p.config.PathSignatures {
+		if p.matchPath(path, mapping.Path) {
+			signatureConfig = &mapping.Signature
+			break
+		}
+	}
+
+	if signatureConfig == nil {
+		return nil // 没有找到匹配的签名配置
+	}
+
+	generator, err := p.signatureFactory.CreateGenerator(signatureConfig.Type, signatureConfig.Config)
+	if err != nil {
+		return fmt.Errorf("创建签名生成器失败: %w", err)
+	}
+
+	headers, err := generator.GenerateHeaders(req.Method, path, body, nil)
+	if err != nil {
+		return fmt.Errorf("生成签名失败: %w", err)
+	}
+
+	for key, value := range headers {
+		req.Header.Set(key, value)
+	}
+
+	logger.Infof("Added %s signature headers for path %s", generator.GetType(), path)
+	return nil
+}
+
+func (p *ProxyHandler) matchPath(requestPath, configPath string) bool {
+	if configPath == requestPath {
+		return true
+	}
+
+	// 支持通配符匹配 (简单的前缀匹配)
+	if strings.HasSuffix(configPath, "*") {
+		prefix := strings.TrimSuffix(configPath, "*")
+		return strings.HasPrefix(requestPath, prefix)
+	}
+
+	return false
 }
 
 // handleUpstreamError 处理上游服务错误

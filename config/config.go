@@ -8,7 +8,7 @@ import (
 	"gopkg.in/yaml.v2"
 )
 
-// // go:embed config.dev.yaml
+// //go:embed config.dev.yaml
 var embeddedConfig []byte
 
 var config *Config
@@ -28,11 +28,24 @@ type AuthConfig struct {
 	SignatureTimeWindow int  `yaml:"signature_time_window"` // 时间窗口（秒）
 }
 
+// SignatureConfig 签名配置
+type SignatureConfig struct {
+	Type   string            `yaml:"type"`
+	Config map[string]string `yaml:"config"`
+}
+
+// PathSignatureMapping 路径签名映射
+type PathSignatureMapping struct {
+	Path      string          `yaml:"path"`
+	Signature SignatureConfig `yaml:"signature"`
+}
+
 type Config struct {
-	Port     int                     `yaml:"port"`
-	Database DatabaseConfig          `yaml:"database"`
-	Auth     AuthConfig              `yaml:"auth"`
-	Targets  map[string]TargetConfig `yaml:"targets"`
+	Port           int                     `yaml:"port"`
+	Database       DatabaseConfig          `yaml:"database"`
+	Auth           AuthConfig              `yaml:"auth"`
+	Targets        map[string]TargetConfig `yaml:"targets"`
+	PathSignatures []PathSignatureMapping  `yaml:"path_signatures"`
 }
 
 func NewConfig() (*Config, error) {

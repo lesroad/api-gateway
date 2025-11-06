@@ -93,8 +93,6 @@ func (p *ProxyHandler) ProxyRequest(c *gin.Context) {
 	defer resp.Body.Close()
 
 	logger.Infof("Received response from upstream: status %d", resp.StatusCode)
-	// bodyBytes, _ := io.ReadAll(resp.Body)
-	// logger.Infof("Body: %s", string(bodyBytes))
 
 	// 转发响应
 	p.forwardResponse(c, resp)

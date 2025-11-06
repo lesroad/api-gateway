@@ -50,6 +50,7 @@ func SetupRouter(clientRepo repository.ClientRepository, callLogRepo repository.
 		api.POST("/math/quesiton_similar_recommend", proxyHandler.ProxyRequest)
 		api.POST("/math/process", proxyHandler.ProxyRequest)
 		api.POST("/math/cropping", proxyHandler.ProxyRequest)
+		api.POST("/essay/statistics", proxyHandler.ProxyRequest)
 	}
 
 	admin := r.Group("/admin")

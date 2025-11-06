@@ -7,6 +7,7 @@ import (
 	"api-gateway/pkg/logger"
 	"api-gateway/pkg/signature"
 	"bytes"
+	"compress/gzip"
 	"context"
 	"fmt"
 	"io"
@@ -93,8 +94,30 @@ func (p *ProxyHandler) ProxyRequest(c *gin.Context) {
 	defer resp.Body.Close()
 
 	logger.Infof("Received response from upstream: status %d", resp.StatusCode)
-	// bodyBytes, _ := io.ReadAll(resp.Body)
-	// logger.Infof("Body: %s", string(bodyBytes))
+
+	// 读取响应体并记录日志（如果响应体不太大的话）
+	bodyBytes, _ := io.ReadAll(resp.Body)
+
+	// 检查是否响应被压缩
+	contentEncoding := resp.Header.Get("Content-Encoding")
+	if strings.Contains(contentEncoding, "gzip") && len(bodyBytes) > 0 {
+		// 如果是 gzip 压缩，尝试解压后记录
+		if decompressed, err := p.decompressGzip(bodyBytes); err == nil {
+			logger.Infof("Body (decompressed): %s", string(decompressed))
+		} else {
+			logger.Infof("Body (compressed, cannot decompress): %d bytes", len(bodyBytes))
+		}
+	} else {
+		// 限制日志大小，避免日志过大
+		if len(bodyBytes) > 1000 {
+			logger.Infof("Body (first 1000 bytes): %s", string(bodyBytes[:1000]))
+		} else {
+			logger.Infof("Body: %s", string(bodyBytes))
+		}
+	}
+
+	// 重新创建响应体供后续转发
+	resp.Body = io.NopCloser(bytes.NewReader(bodyBytes))
 
 	// 转发响应
 	p.forwardResponse(c, resp)
@@ -313,6 +336,17 @@ func (p *ProxyHandler) matchPath(requestPath, configPath string) bool {
 	}
 
 	return false
+}
+
+// decompressGzip 解压缩 gzip 数据
+func (p *ProxyHandler) decompressGzip(data []byte) ([]byte, error) {
+	reader, err := gzip.NewReader(bytes.NewReader(data))
+	if err != nil {
+		return nil, err
+	}
+	defer reader.Close()
+
+	return io.ReadAll(reader)
 }
 
 // handleUpstreamError 处理上游服务错误

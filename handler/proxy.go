@@ -10,6 +10,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"strings"
 	"time"
@@ -26,9 +27,30 @@ type ProxyHandler struct {
 
 // NewProxyHandler 创建代理处理器
 func NewProxyHandler() *ProxyHandler {
+	// 配置 HTTP Transport 以支持高并发
+	transport := &http.Transport{
+		// 连接池配置
+		MaxIdleConns:        100,              // 总的最大空闲连接数
+		MaxIdleConnsPerHost: 100,              // 每个 host 的最大空闲连接数（关键配置）
+		MaxConnsPerHost:     200,              // 每个 host 的最大连接数（包括使用中的）
+		IdleConnTimeout:     90 * time.Second, // 空闲连接超时时间
+
+		// 连接超时配置
+		DialContext: (&net.Dialer{
+			Timeout:   10 * time.Second, // 连接建立超时
+			KeepAlive: 30 * time.Second, // TCP Keep-Alive
+		}).DialContext,
+
+		// TLS 握手超时
+		TLSHandshakeTimeout: 10 * time.Second,
+		//ResponseHeaderTimeout: 30 * time.Second, // 等待响应头超时
+		ExpectContinueTimeout: 1 * time.Second,
+	}
+
 	return &ProxyHandler{
 		client: &http.Client{
-			Timeout: 0,
+			Timeout:   0, // 使用 context 超时控制，而不是 client 级别超时
+			Transport: transport,
 		},
 		config:           config.GetConfig(),
 		signatureFactory: signature.NewSignatureFactory(),

@@ -37,14 +37,17 @@ func NewProxyHandler() *ProxyHandler {
 
 		// 连接超时配置
 		DialContext: (&net.Dialer{
-			Timeout:   10 * time.Second, // 连接建立超时
-			KeepAlive: 30 * time.Second, // TCP Keep-Alive
+			Timeout:   60 * time.Second, // 连接建立超时
+			KeepAlive: 60 * time.Second, // TCP Keep-Alive
 		}).DialContext,
 
 		// TLS 握手超时
-		TLSHandshakeTimeout: 10 * time.Second,
-		//ResponseHeaderTimeout: 30 * time.Second, // 等待响应头超时
-		ExpectContinueTimeout: 1 * time.Second,
+		TLSHandshakeTimeout: 60 * time.Second,
+
+		// ExpectContinueTimeout: 1 * time.Second,
+
+		// 注意：不设置 ResponseHeaderTimeout
+		// 使用 Context 超时控制整体请求时间（从 config.yaml 读取）
 	}
 
 	return &ProxyHandler{

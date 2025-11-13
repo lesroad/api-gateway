@@ -4,17 +4,21 @@ import (
 	"api-gateway/config"
 	"api-gateway/handler"
 	"api-gateway/middleware"
+	"api-gateway/pkg/metrics"
 	"api-gateway/repository"
 	"api-gateway/service"
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 func SetupRouter(clientRepo repository.ClientRepository, callLogRepo repository.CallLogRepository) *gin.Engine {
 	r := gin.Default()
 
 	cfg := config.GetConfig()
+
+	metrics.InitMetrics()
 
 	timeWindow := time.Duration(cfg.Auth.SignatureTimeWindow) * time.Second
 	signatureValidator := middleware.NewHMACSignatureValidator(timeWindow)
@@ -23,11 +27,14 @@ func SetupRouter(clientRepo repository.ClientRepository, callLogRepo repository.
 	rateLimitMiddleware := middleware.NewRateLimitMiddleware()
 	billingMiddleware := middleware.NewBillingMiddleware(clientRepo, callLogRepo)
 	loggingMiddleware := middleware.NewLoggingMiddleware(callLogRepo)
+	prometheusMiddleware := middleware.NewPrometheusMiddleware()
 
 	clientService := service.NewClientService(clientRepo, callLogRepo)
 
 	proxyHandler := handler.NewProxyHandler()
 	adminHandler := handler.NewAdminHandler(clientService)
+
+	r.GET("/metrics", gin.WrapH(promhttp.Handler()))
 
 	api := r.Group("/api")
 	{
@@ -43,6 +50,7 @@ func SetupRouter(clientRepo repository.ClientRepository, callLogRepo repository.
 		api.Use(billingMiddleware.CheckCalls())  // 3. 检查次数
 		api.Use(loggingMiddleware.LogAPICall())  // 4. 记录日志
 		api.Use(billingMiddleware.DeductCalls()) // 5. 扣减次数
+		api.Use(prometheusMiddleware.Monitor())  // 6. Prometheus 监控
 
 		api.POST("/essay/evaluate/stream", proxyHandler.ProxyRequest)
 		api.POST("/sts/ocr", proxyHandler.ProxyRequest)

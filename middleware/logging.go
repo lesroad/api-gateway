@@ -138,7 +138,6 @@ func (l *LoggingMiddleware) LogAPICall() gin.HandlerFunc {
 			bodyBytes, err := io.ReadAll(c.Request.Body)
 			if err == nil {
 				requestBody = string(bodyBytes)
-				// 重新设置请求体，以便后续处理可以读取
 				c.Request.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
 			}
 		}

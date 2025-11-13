@@ -195,7 +195,13 @@ func (p *ProxyHandler) createProxyRequest(c *gin.Context, targetURL string) (*ht
 		logger.Errorf("Failed to add signature headers: %v", err)
 	}
 
-	logger.Infof("Proxy request header: %+v, body:%s", proxyReq.Header, string(bodyBytes))
+	bodyLog := string(bodyBytes)
+	maxBodyLogLen := 50
+	if len(bodyLog) > maxBodyLogLen {
+		bodyLog = bodyLog[:maxBodyLogLen] + "..."
+	}
+
+	logger.Infof("Proxy request header: %+v, body:%s", proxyReq.Header, bodyLog)
 	return proxyReq, nil
 }
 

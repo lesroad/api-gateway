@@ -353,7 +353,7 @@ func (p *ProxyHandler) handleUpstreamError(c *gin.Context, err error) {
 	// 检查错误类型
 	if strings.Contains(err.Error(), "timeout") ||
 		strings.Contains(err.Error(), "deadline exceeded") {
-		// 超时错误
+		logger.Errorf("Upstream request timeout: %v", err)
 		errors.RespondWithError(c, http.StatusGatewayTimeout,
 			errors.NewUpstreamTimeoutError())
 		return

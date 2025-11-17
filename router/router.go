@@ -14,7 +14,9 @@ import (
 )
 
 func SetupRouter(clientRepo repository.ClientRepository, callLogRepo repository.CallLogRepository) *gin.Engine {
-	r := gin.Default()
+	gin.SetMode(gin.ReleaseMode) // 设置为 release 模式
+	r := gin.New()               // 不添加任何中间件
+	r.Use(gin.Recovery())
 
 	cfg := config.GetConfig()
 

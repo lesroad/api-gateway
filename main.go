@@ -4,6 +4,9 @@ import (
 	"api-gateway/config"
 	"api-gateway/database"
 	"api-gateway/pkg/logger"
+	"api-gateway/pkg/queue"
+	"api-gateway/pkg/worker"
+	"api-gateway/repository"
 	"api-gateway/router"
 	"context"
 	"fmt"
@@ -29,7 +32,36 @@ func main() {
 		os.Exit(1)
 	}
 
-	r := router.SetupRouter(dbManager.ClientRepo, dbManager.CallLogRepo)
+	// 初始化任务存储库
+	taskRepo := repository.NewTaskMongoRepository(dbManager.MongoDB.Database)
+
+	var taskQueue queue.TaskQueue
+	var workerPool *worker.WorkerPool
+
+	if cfg.Async.Enabled {
+		workerCount := cfg.Async.WorkerCount
+		if workerCount == 0 {
+			workerCount = 10 // 默认 10 个 worker
+		}
+
+		var err error
+		taskQueue, err = queue.NewRedisTaskQueue(
+			cfg.Async.Redis.Addr,
+			cfg.Async.Redis.Password,
+			cfg.Async.Redis.DB,
+			cfg.Async.Redis.QueueKey,
+		)
+		if err != nil {
+			logger.Errorf("Failed to connect to Redis: %v", err)
+			os.Exit(1)
+		}
+		logger.Info("Redis queue initialized successfully")
+
+		workerPool = worker.NewWorkerPool(workerCount, taskQueue, taskRepo)
+		workerPool.Start()
+	}
+
+	r := router.SetupRouter(dbManager.ClientRepo, dbManager.CallLogRepo, taskRepo, taskQueue)
 
 	addr := fmt.Sprintf(":%d", cfg.Port)
 	logger.Infof("API Gateway starting on port %d", cfg.Port)
@@ -50,6 +82,16 @@ func main() {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
+
+	// 停止 Worker Pool
+	if workerPool != nil {
+		workerPool.Stop()
+	}
+
+	// 关闭任务队列
+	if taskQueue != nil {
+		taskQueue.Close()
+	}
 
 	if err := dbManager.Close(ctx); err != nil {
 		logger.Errorf("Error closing database: %v", err)

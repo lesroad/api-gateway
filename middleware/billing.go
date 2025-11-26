@@ -72,7 +72,7 @@ func (b *BillingMiddleware) CheckCalls() gin.HandlerFunc {
 // DeductCalls 扣减调用次数（仅在响应成功时调用）
 func (b *BillingMiddleware) DeductCalls() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		c.Next() // 先执行后续处理器
+		c.Next()
 
 		// 只有在响应状态码为200时才扣减次数
 		if c.Writer.Status() != http.StatusOK {

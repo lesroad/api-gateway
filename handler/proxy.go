@@ -371,3 +371,15 @@ func (p *ProxyHandler) handleUpstreamError(c *gin.Context, err error) {
 	errors.RespondWithError(c, http.StatusBadGateway,
 		errors.NewUpstreamError(fmt.Sprintf("上游服务错误: %v", err)))
 }
+
+func (p *ProxyHandler) CallbackHandler(c *gin.Context) {
+	bodyBytes, err := io.ReadAll(c.Request.Body)
+	if err != nil {
+		logger.Errorf("读取回调请求体失败: %v", err)
+		c.JSON(http.StatusBadRequest, gin.H{"error": "failed to read body"})
+		return
+	}
+
+	logger.Infof("收到回调请求: Headers: %+v, Body: %s", c.Request.Header, string(bodyBytes))
+	c.JSON(http.StatusOK, gin.H{"status": "ok"})
+}

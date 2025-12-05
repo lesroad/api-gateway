@@ -171,7 +171,7 @@ func (l *LoggingMiddleware) LogAPICall() gin.HandlerFunc {
 
 		// 异步记录日志，避免影响响应性能
 		go func() {
-			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 			defer cancel()
 
 			if err := l.callLogRepo.Create(ctx, callLog); err != nil {

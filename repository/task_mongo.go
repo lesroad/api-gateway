@@ -102,7 +102,6 @@ func (r *taskMongoRepository) GetByID(ctx context.Context, id string) (*model.Ta
 	return &task, nil
 }
 
-// Update 更新任务
 func (r *taskMongoRepository) Update(ctx context.Context, task *model.Task) error {
 	filter := bson.M{"task_id": task.TaskID}
 	_, err := r.collection.ReplaceOne(ctx, filter, task)
@@ -112,7 +111,6 @@ func (r *taskMongoRepository) Update(ctx context.Context, task *model.Task) erro
 	return nil
 }
 
-// UpdateStatus 更新任务状态
 func (r *taskMongoRepository) UpdateStatus(ctx context.Context, taskID string, status model.TaskStatus) error {
 	filter := bson.M{"task_id": taskID}
 	update := bson.M{"$set": bson.M{"status": status}}
@@ -123,7 +121,6 @@ func (r *taskMongoRepository) UpdateStatus(ctx context.Context, taskID string, s
 	return nil
 }
 
-// GetTasksByClient 获取客户端的任务列表
 func (r *taskMongoRepository) GetTasksByClient(ctx context.Context, clientID string, limit int, offset int) ([]*model.Task, error) {
 	filter := bson.M{"client_id": clientID}
 	opts := options.Find().

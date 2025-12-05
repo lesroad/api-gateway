@@ -25,19 +25,14 @@ func SetupRouter(clientRepo repository.ClientRepository, callLogRepo repository.
 	metrics.InitMetrics()
 
 	timeWindow := time.Duration(cfg.Auth.SignatureTimeWindow) * time.Second
-	signatureValidator := middleware.NewHMACSignatureValidator(timeWindow)
 
+	signatureValidator := middleware.NewHMACSignatureValidator(timeWindow)
 	authMiddleware := middleware.NewAuthMiddleware(clientRepo, signatureValidator, cfg)
 	rateLimitMiddleware := middleware.NewRateLimitMiddleware()
 	billingMiddleware := middleware.NewBillingMiddleware(clientRepo, callLogRepo)
 	loggingMiddleware := middleware.NewLoggingMiddleware(callLogRepo)
 	prometheusMiddleware := middleware.NewPrometheusMiddleware()
-
-	// 只在启用异步功能时创建异步中间件
-	var asyncMiddleware *middleware.AsyncMiddleware
-	if taskQueue != nil {
-		asyncMiddleware = middleware.NewAsyncMiddleware(taskQueue, taskRepo, cfg)
-	}
+	asyncMiddleware := middleware.NewAsyncMiddleware(taskQueue, taskRepo, cfg)
 
 	clientService := service.NewClientService(clientRepo, callLogRepo)
 

@@ -101,7 +101,7 @@ func (wp *WorkerPool) processTask(workerID int, task *model.Task) {
 
 	// 更新任务结果
 	if err != nil {
-		task.MarkFailed(err.Error(), statusCode)
+		task.MarkFailed(err.Error()+"|"+result, statusCode)
 		logger.Errorf("Worker %d task %s failed: %v", workerID, task.TaskID, err)
 	} else {
 		task.MarkSuccess(result, statusCode)

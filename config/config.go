@@ -19,8 +19,10 @@ type DatabaseConfig struct {
 }
 
 type TargetConfig struct {
-	URL     string `yaml:"url"`
-	Timeout int    `yaml:"timeout"`
+	Path          string   `yaml:"path"`
+	URL           string   `yaml:"url"`
+	Timeout       int      `yaml:"timeout"`
+	PreHandlerDSL []string `yaml:"pre_handler_dsl"`
 }
 
 type AuthConfig struct {
@@ -53,11 +55,20 @@ type PathSignatureMapping struct {
 	Signature SignatureConfig `yaml:"signature"`
 }
 
+type COSConfig struct {
+	SecretID  string `yaml:"secret_id"`
+	SecretKey string `yaml:"secret_key"`
+	Region    string `yaml:"region"`
+	Bucket    string `yaml:"bucket"`
+	BaseURL   string `yaml:"base_url"`
+}
+
 type Config struct {
 	Port           int                     `yaml:"port"`
 	Database       DatabaseConfig          `yaml:"database"`
 	Auth           AuthConfig              `yaml:"auth"`
-	Async          AsyncConfig             `yaml:"async"` // 异步任务配置
+	Async          AsyncConfig             `yaml:"async"`
+	COS            COSConfig               `yaml:"cos"`
 	Targets        map[string]TargetConfig `yaml:"targets"`
 	PathSignatures []PathSignatureMapping  `yaml:"path_signatures"`
 }

@@ -11,7 +11,6 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// TokenBucket 令牌桶结构
 type TokenBucket struct {
 	capacity   int        // 桶容量
 	tokens     int        // 当前令牌数
@@ -20,7 +19,6 @@ type TokenBucket struct {
 	mutex      sync.Mutex // 互斥锁
 }
 
-// NewTokenBucket 创建新的令牌桶
 func NewTokenBucket(capacity, refillRate int) *TokenBucket {
 	return &TokenBucket{
 		capacity:   capacity,
@@ -57,13 +55,11 @@ func (tb *TokenBucket) TakeToken() bool {
 	return false
 }
 
-// RateLimitMiddleware 限流中间件
 type RateLimitMiddleware struct {
 	buckets map[string]*TokenBucket // 客户端ID -> 令牌桶
 	mutex   sync.RWMutex            // 读写锁
 }
 
-// NewRateLimitMiddleware 创建限流中间件
 func NewRateLimitMiddleware() *RateLimitMiddleware {
 	rl := &RateLimitMiddleware{
 		buckets: make(map[string]*TokenBucket),
@@ -75,7 +71,6 @@ func NewRateLimitMiddleware() *RateLimitMiddleware {
 	return rl
 }
 
-// RateLimit 限流处理函数
 func (rl *RateLimitMiddleware) RateLimit() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// 从上下文中获取客户信息（由认证中间件设置）
@@ -115,7 +110,6 @@ func (rl *RateLimitMiddleware) RateLimit() gin.HandlerFunc {
 	}
 }
 
-// getOrCreateBucket 获取或创建令牌桶
 func (rl *RateLimitMiddleware) getOrCreateBucket(clientID string, qps int) *TokenBucket {
 	rl.mutex.RLock()
 	bucket, exists := rl.buckets[clientID]
@@ -151,7 +145,6 @@ func (rl *RateLimitMiddleware) getOrCreateBucket(clientID string, qps int) *Toke
 	return bucket
 }
 
-// cleanup 清理不活跃的令牌桶
 func (rl *RateLimitMiddleware) cleanup() {
 	ticker := time.NewTicker(5 * time.Minute) // 每5分钟清理一次
 	defer ticker.Stop()
@@ -172,25 +165,4 @@ func (rl *RateLimitMiddleware) cleanup() {
 
 		rl.mutex.Unlock()
 	}
-}
-
-// GetBucketStats 获取令牌桶统计信息（用于监控）
-func (rl *RateLimitMiddleware) GetBucketStats() map[string]map[string]interface{} {
-	rl.mutex.RLock()
-	defer rl.mutex.RUnlock()
-
-	stats := make(map[string]map[string]interface{})
-
-	for clientID, bucket := range rl.buckets {
-		bucket.mutex.Lock()
-		stats[clientID] = map[string]interface{}{
-			"capacity":    bucket.capacity,
-			"tokens":      bucket.tokens,
-			"refill_rate": bucket.refillRate,
-			"last_refill": bucket.lastRefill,
-		}
-		bucket.mutex.Unlock()
-	}
-
-	return stats
 }

@@ -60,7 +60,6 @@ func NewProxyHandler() *ProxyHandler {
 	}
 }
 
-// ProxyRequest 代理请求处理
 func (p *ProxyHandler) ProxyRequest(c *gin.Context) {
 	// 从上下文中获取客户信息
 	clientInterface, exists := c.Get("client")

@@ -16,20 +16,16 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// LoggingMiddleware 调用日志记录中间件
 type LoggingMiddleware struct {
 	callLogRepo repository.CallLogRepository
 }
 
-// NewLoggingMiddleware 创建调用日志记录中间件
 func NewLoggingMiddleware(callLogRepo repository.CallLogRepository) *LoggingMiddleware {
 	return &LoggingMiddleware{
 		callLogRepo: callLogRepo,
 	}
 }
 
-// loggingResponseWriter 包装gin.ResponseWriter以捕获响应状态码和内容
-// 避免与标准库的ResponseWriter混淆，使用更具体的命名
 type loggingResponseWriter struct {
 	gin.ResponseWriter
 	statusCode        int
@@ -38,7 +34,6 @@ type loggingResponseWriter struct {
 	streamBuffer      *bytes.Buffer // 收集所有流式数据
 }
 
-// newLoggingResponseWriter 创建一个新的日志记录响应写入器
 func newLoggingResponseWriter(w gin.ResponseWriter, isStream bool) *loggingResponseWriter {
 	return &loggingResponseWriter{
 		ResponseWriter:    w,
@@ -49,13 +44,11 @@ func newLoggingResponseWriter(w gin.ResponseWriter, isStream bool) *loggingRespo
 	}
 }
 
-// CaptureStatusCode 捕获HTTP状态码
 func (lrw *loggingResponseWriter) WriteHeader(code int) {
 	lrw.statusCode = code
 	lrw.ResponseWriter.WriteHeader(code)
 }
 
-// CaptureResponseData 捕获响应数据并写入到底层ResponseWriter
 func (lrw *loggingResponseWriter) Write(data []byte) (int, error) {
 	// 如果是流式请求，先收集数据，不立即解析
 	if lrw.isStreamRequest {
@@ -68,12 +61,10 @@ func (lrw *loggingResponseWriter) Write(data []byte) (int, error) {
 	return lrw.ResponseWriter.Write(data)
 }
 
-// GetStatusCode 获取HTTP状态码
 func (lrw *loggingResponseWriter) GetStatusCode() int {
 	return lrw.statusCode
 }
 
-// GetResponseBody 获取响应体内容
 func (lrw *loggingResponseWriter) GetResponseBody() string {
 	if lrw.isStreamRequest {
 		// 对于流式响应，现在解析完整数据并提取最终结果
@@ -84,7 +75,6 @@ func (lrw *loggingResponseWriter) GetResponseBody() string {
 	return lrw.notStreamResponse.String()
 }
 
-// parseCompleteStreamData 解析完整的流式数据，提取最终的完成消息
 func (lrw *loggingResponseWriter) parseCompleteStreamData() string {
 	content := lrw.streamBuffer.String()
 
@@ -113,7 +103,6 @@ func (lrw *loggingResponseWriter) parseCompleteStreamData() string {
 	return ""
 }
 
-// LogAPICall 记录API调用日志
 func (l *LoggingMiddleware) LogAPICall() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// 记录开始时间

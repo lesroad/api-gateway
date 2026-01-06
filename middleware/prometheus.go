@@ -85,7 +85,6 @@ func (m *PrometheusMiddleware) Monitor() gin.HandlerFunc {
 	}
 }
 
-// responseWriter 自定义 ResponseWriter，用于捕获响应大小和状态码
 type responseWriter struct {
 	gin.ResponseWriter
 	statusCode int

@@ -30,6 +30,7 @@ func SetupRouter(clientRepo repository.ClientRepository, callLogRepo repository.
 	authMiddleware := middleware.NewAuthMiddleware(clientRepo, signatureValidator, cfg)
 	rateLimitMiddleware := middleware.NewRateLimitMiddleware()
 	billingMiddleware := middleware.NewBillingMiddleware(clientRepo, callLogRepo)
+	dslMiddleware := middleware.NewDSLMiddleware(cfg)
 	loggingMiddleware := middleware.NewLoggingMiddleware(callLogRepo)
 	prometheusMiddleware := middleware.NewPrometheusMiddleware()
 	asyncMiddleware := middleware.NewAsyncMiddleware(taskQueue, taskRepo, cfg)
@@ -58,20 +59,15 @@ func SetupRouter(clientRepo repository.ClientRepository, callLogRepo repository.
 		api.Use(rateLimitMiddleware.RateLimit()) // 2. 限流
 		api.Use(billingMiddleware.CheckCalls())  // 3. 检查次数
 		api.Use(billingMiddleware.DeductCalls()) // 4. 扣减次数（异步请求也要先扣费）
-		api.Use(loggingMiddleware.LogAPICall())  // 5. 记录日志
+		api.Use(dslMiddleware.Process())         // 5. DSL规则引擎处理
+		api.Use(loggingMiddleware.LogAPICall())  // 6. 记录日志
 		if asyncMiddleware != nil {
-			api.Use(asyncMiddleware.HandleAsync()) // 6. 异步处理（异步请求在这里提前返回）
+			api.Use(asyncMiddleware.HandleAsync()) // 7. 异步处理（异步请求在这里提前返回）
 		}
-		api.Use(prometheusMiddleware.Monitor()) // 7. Prometheus 监控
+		api.Use(prometheusMiddleware.Monitor()) // 8. Prometheus 监控
 
-		// 业务接口
-		api.POST("/essay/evaluate/stream", proxyHandler.ProxyRequest)
-		api.POST("/sts/ocr", proxyHandler.ProxyRequest)
-		api.POST("/essay/evaluate/english", proxyHandler.ProxyRequest)
-		api.POST("/math/quesiton_similar_recommend", proxyHandler.ProxyRequest)
-		api.POST("/math/process", proxyHandler.ProxyRequest)
-		api.POST("/math/cropping", proxyHandler.ProxyRequest)
-		api.POST("/essay/statistics", proxyHandler.ProxyRequest)
+		// 从配置文件动态注册业务接口
+		registerRoutesFromConfig(api, proxyHandler, cfg)
 
 		// 任务查询接口
 		api.GET("/tasks/:task_id", taskHandler.GetTask)
@@ -94,4 +90,12 @@ func SetupRouter(clientRepo repository.ClientRepository, callLogRepo repository.
 	}
 
 	return r
+}
+
+func registerRoutesFromConfig(api *gin.RouterGroup, proxyHandler *handler.ProxyHandler, cfg *config.Config) {
+	for _, target := range cfg.Targets {
+		if target.Path != "" {
+			api.POST(target.Path, proxyHandler.ProxyRequest)
+		}
+	}
 }

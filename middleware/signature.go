@@ -13,18 +13,15 @@ import (
 	"time"
 )
 
-// SignatureValidator 签名验证器接口
 type SignatureValidator interface {
 	ValidateSignature(req *http.Request, client *model.Client) error
 	GenerateSignature(method, path, timestamp, bodyHash, secret string) string
 }
 
-// HMACSignatureValidator HMAC签名验证器实现
 type HMACSignatureValidator struct {
 	timeWindow time.Duration // 时间窗口，默认5分钟
 }
 
-// NewHMACSignatureValidator 创建HMAC签名验证器
 func NewHMACSignatureValidator(timeWindow time.Duration) *HMACSignatureValidator {
 	if timeWindow == 0 {
 		timeWindow = 5 * time.Minute // 默认5分钟时间窗口
@@ -34,7 +31,6 @@ func NewHMACSignatureValidator(timeWindow time.Duration) *HMACSignatureValidator
 	}
 }
 
-// ValidateSignature 验证请求签名
 func (v *HMACSignatureValidator) ValidateSignature(req *http.Request, client *model.Client) error {
 	// 1. 提取请求头中的签名和时间戳
 	signature := req.Header.Get("X-Signature")
@@ -69,7 +65,6 @@ func (v *HMACSignatureValidator) ValidateSignature(req *http.Request, client *mo
 	return nil
 }
 
-// GenerateSignature 生成HMAC-SHA256签名
 func (v *HMACSignatureValidator) GenerateSignature(method, path, timestamp, bodyHash, secret string) string {
 	// 构建签名字符串: HTTP方法 + "\n" + URI路径 + "\n" + 时间戳 + "\n" + 请求体哈希
 	message := fmt.Sprintf("%s\n%s\n%s\n%s", method, path, timestamp, bodyHash)
@@ -82,7 +77,6 @@ func (v *HMACSignatureValidator) GenerateSignature(method, path, timestamp, body
 	return base64.StdEncoding.EncodeToString(h.Sum(nil))
 }
 
-// validateTimestamp 验证时间戳
 func (v *HMACSignatureValidator) validateTimestamp(timestampStr string) error {
 	// 解析时间戳
 	timestamp, err := strconv.ParseInt(timestampStr, 10, 64)
@@ -107,7 +101,6 @@ func (v *HMACSignatureValidator) validateTimestamp(timestampStr string) error {
 	return nil
 }
 
-// calculateBodyHash 计算请求体的SHA256哈希
 func (v *HMACSignatureValidator) calculateBodyHash(req *http.Request) (string, error) {
 	if req.Body == nil {
 		// 空请求体的哈希

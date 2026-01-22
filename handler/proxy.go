@@ -61,7 +61,6 @@ func NewProxyHandler() *ProxyHandler {
 }
 
 func (p *ProxyHandler) ProxyRequest(c *gin.Context) {
-	// 从上下文中获取客户信息
 	clientInterface, exists := c.Get("client")
 	if !exists {
 		c.JSON(http.StatusInternalServerError, gin.H{
@@ -80,7 +79,6 @@ func (p *ProxyHandler) ProxyRequest(c *gin.Context) {
 		return
 	}
 
-	// 根据客户版本获取目标URL
 	targetURL, err := p.getTargetURL(client.Version)
 	if err != nil {
 		logger.Errorf("Failed to get target URL for version %s: %v", client.Version, err)
@@ -89,40 +87,74 @@ func (p *ProxyHandler) ProxyRequest(c *gin.Context) {
 		return
 	}
 
-	// 创建代理请求
-	proxyReq, err := p.createProxyRequest(c, targetURL)
-	if err != nil {
-		logger.Errorf("Failed to create proxy request: %v", err)
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"code":    50000,
-			"message": fmt.Sprintf("创建代理请求失败: %v", err),
-		})
-		return
+	var bodyBytes []byte
+	if c.Request.Body != nil {
+		bodyBytes, err = io.ReadAll(c.Request.Body)
+		if err != nil {
+			logger.Errorf("Failed to read request body: %v", err)
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"code":    50000,
+				"message": fmt.Sprintf("读取请求体失败: %v", err),
+			})
+			return
+		}
+		c.Request.Body.Close()
 	}
 
-	// 设置超时
 	timeout := p.getTimeoutForVersion(client.Version)
 	ctx, cancel := context.WithTimeout(c.Request.Context(), timeout)
 	defer cancel()
-	proxyReq = proxyReq.WithContext(ctx)
 
-	// 发送请求
+	const maxRetries = 3
+	const retryDelay = 1 * time.Second
+	var resp *http.Response
+
 	logger.Infof("Proxying request to %s for client %s", targetURL, client.ID.Hex())
-	resp, err := p.client.Do(proxyReq)
-	if err != nil {
-		logger.Errorf("Upstream request failed: %v", err)
-		p.handleUpstreamError(c, err)
-		return
+
+	for attempt := 1; attempt <= maxRetries; attempt++ {
+		proxyReq, err := p.createProxyRequestWithBody(c, targetURL, bodyBytes)
+		if err != nil {
+			logger.Errorf("Failed to create proxy request: %v", err)
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"code":    50000,
+				"message": fmt.Sprintf("创建代理请求失败: %v", err),
+			})
+			return
+		}
+		proxyReq = proxyReq.WithContext(ctx)
+
+		resp, err = p.client.Do(proxyReq)
+		if err != nil {
+			logger.Errorf("Upstream request failed (attempt %d/%d): %v", attempt, maxRetries, err)
+			if attempt < maxRetries {
+				logger.Infof("Retrying after %v...", retryDelay)
+				time.Sleep(retryDelay)
+				continue
+			}
+			p.handleUpstreamError(c, err)
+			return
+		}
+
+		logger.Infof("Received response from upstream: status %d (attempt %d/%d)", resp.StatusCode, attempt, maxRetries)
+
+		if resp.StatusCode == http.StatusOK {
+			break
+		}
+
+		resp.Body.Close()
+		if attempt < maxRetries {
+			logger.Infof("Non-200 status code %d, retrying after %v", resp.StatusCode, retryDelay)
+			time.Sleep(retryDelay)
+			continue
+		}
+
+		logger.Errorf("All %d attempts failed, forwarding last response with status %d", maxRetries, resp.StatusCode)
 	}
 	defer resp.Body.Close()
 
-	logger.Infof("Received response from upstream: status %d", resp.StatusCode)
-
-	// 转发响应
 	p.forwardResponse(c, resp)
 }
 
-// getTargetURL 根据版本获取目标URL
 func (p *ProxyHandler) getTargetURL(version string) (string, error) {
 	if p.config == nil {
 		return "", fmt.Errorf("配置未初始化")
@@ -162,6 +194,11 @@ func (p *ProxyHandler) createProxyRequest(c *gin.Context, targetURL string) (*ht
 		c.Request.Body.Close()
 	}
 
+	return p.createProxyRequestWithBody(c, targetURL, bodyBytes)
+}
+
+// createProxyRequestWithBody 使用已读取的请求体创建代理请求
+func (p *ProxyHandler) createProxyRequestWithBody(c *gin.Context, targetURL string, bodyBytes []byte) (*http.Request, error) {
 	proxyReq, err := http.NewRequest(c.Request.Method, targetURL, bytes.NewReader(bodyBytes))
 	if err != nil {
 		return nil, fmt.Errorf("创建HTTP请求失败: %w", err)
